@@ -1,0 +1,1278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DevSec Dash - Local Security Scanner</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/pyodide/v0.28.2/full/pyodide.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 16px;
+            padding: 30px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+        }
+        
+        header {
+            text-align: center;
+            margin-bottom: 30px;
+            position: relative;
+        }
+        
+        .settings-btn {
+            position: absolute;
+            top: 0;
+            right: 0;
+            background: rgba(255, 255, 255, 0.8);
+            border: none;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            font-size: 1.2rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .settings-btn:hover {
+            background: rgba(255, 255, 255, 1);
+            transform: rotate(90deg);
+        }
+        
+        .settings-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+        }
+        
+        .settings-content {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            width: 90%;
+            max-width: 400px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+        }
+        
+        .settings-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        
+        .close-btn {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: #718096;
+        }
+        
+        .setting-item {
+            margin-bottom: 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        h1 {
+            color: #2d3748;
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 10px;
+        }
+        
+        .subtitle {
+            color: #718096;
+            font-size: 1.1rem;
+        }
+        
+        .input-section {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 30px;
+            border: 2px dashed #e2e8f0;
+            transition: all 0.3s ease;
+        }
+        
+        .input-section:hover {
+            border-color: #667eea;
+            transform: translateY(-2px);
+        }
+        
+        .file-upload {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 15px;
+        }
+        
+        .upload-btn {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: transform 0.2s ease;
+        }
+        
+        .upload-btn:hover {
+            transform: scale(1.05);
+        }
+        
+        textarea {
+            width: 100%;
+            height: 200px;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 15px;
+            font-family: 'Fira Code', monospace;
+            resize: vertical;
+        }
+        
+        .scan-btn {
+            background: #48bb78;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 8px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            cursor: pointer;
+            width: 100%;
+            margin-top: 15px;
+            transition: all 0.3s ease;
+        }
+        
+        .scan-btn:hover {
+            background: #38a169;
+            transform: translateY(-2px);
+        }
+        
+        .scan-btn:disabled {
+            background: #a0aec0;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .results {
+            display: none;
+            animation: fadeIn 0.5s ease;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .dashboard {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .metric-card {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+        
+        .metric-value {
+            font-size: 3rem;
+            font-weight: 700;
+            margin-bottom: 5px;
+        }
+        
+        .metric-label {
+            color: #718096;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        .score-high { color: #48bb78; }
+        .score-medium { color: #ed8936; }
+        .score-low { color: #f56565; }
+        
+        .chart-container {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+        
+        .findings {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+        
+        .finding {
+            border-left: 4px solid;
+            padding: 15px;
+            margin-bottom: 15px;
+            border-radius: 0 8px 8px 0;
+        }
+        
+        .finding.high {
+            border-color: #f56565;
+            background: #fed7d7;
+        }
+        
+        .finding.medium {
+            border-color: #ed8936;
+            background: #feebc8;
+        }
+        
+        .finding.low {
+            border-color: #48bb78;
+            background: #c6f6d5;
+        }
+        
+        .finding-title {
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+        
+        .finding-line {
+            color: #718096;
+            font-size: 0.9rem;
+            font-family: monospace;
+        }
+        
+        .export-btn {
+            background: #6c5ce7;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            margin: 10px 5px;
+            cursor: pointer;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #718096;
+        }
+        
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .scan-type-badge {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            font-weight: 500;
+            margin-left: 10px;
+        }
+        
+        .finding-source {
+            display: inline-block;
+            background: #e2e8f0;
+            color: #4a5568;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            margin-left: 8px;
+        }
+        
+        .progress-container {
+            margin: 20px 0;
+            width: 100%;
+            max-width: 300px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: #e2e8f0;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-bottom: 8px;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+        
+        .progress-text {
+            text-align: center;
+            font-size: 0.9rem;
+            color: #718096;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <button class="settings-btn" onclick="openSettings()">⚙️</button>
+            <h1>🛡️ DevSec Dash</h1>
+            <p class="subtitle">Local Security Scanner - Quick Regex + Deep AST Analysis - Your code never leaves your browser</p>
+        </header>
+        
+        <div class="input-section">
+            <div class="file-upload">
+                <input type="file" id="fileInput" accept=".py,.js,.php,.java,.rb,.go,.cpp,.c,.cs" style="display: none;">
+                <button class="upload-btn" onclick="document.getElementById('fileInput').click()">
+                    📁 Upload Code File
+                </button>
+                <p>or paste your code below:</p>
+                <textarea id="codeInput" placeholder="Paste your source code here..."></textarea>
+                
+                <div style="margin: 15px 0; text-align: center;">
+                    <label style="margin-right: 20px;">
+                        <input type="radio" name="scanType" value="quick" checked> 
+                        ⚡ Quick Scan (Regex)
+                    </label>
+                    <label>
+                        <input type="radio" name="scanType" value="deep"> 
+                        🔬 Deep Scan (AST Analysis)
+                    </label>
+                </div>
+                
+                <button class="scan-btn" id="scanBtn" onclick="scanCode()">
+                    🔍 Scan for Vulnerabilities
+                </button>
+            </div>
+        </div>
+        
+        <div class="loading" id="loading" style="display: none;">
+            <div class="spinner"></div>
+            <p id="loadingText">Analyzing your code...</p>
+            <div class="progress-container" id="progressContainer" style="display: none;">
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill"></div>
+                </div>
+                <div class="progress-text" id="progressText">0%</div>
+            </div>
+        </div>
+        
+        <div class="results" id="results">
+            <div class="dashboard">
+                <div class="metric-card">
+                    <div class="metric-value" id="securityScore">0</div>
+                    <div class="metric-label">Security Score</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-value" id="issueCount">0</div>
+                    <div class="metric-label">Issues Found</div>
+                </div>
+            </div>
+            
+            <div class="chart-container">
+                <canvas id="vulnerabilityChart"></canvas>
+            </div>
+            
+            <div class="findings">
+                <h3>🔍 Security Findings <span id="scanTypeBadge" class="scan-type-badge"></span></h3>
+                <div style="margin: 15px 0;">
+                    <button class="export-btn" onclick="exportReport('json')">📄 Export JSON</button>
+                    <button class="export-btn" onclick="exportReport('markdown')">📝 Export Markdown</button>
+                    <button class="export-btn" onclick="exportReport('pdf')">📋 Export PDF</button>
+                </div>
+                <div id="findingsList"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div class="settings-modal" id="settingsModal">
+        <div class="settings-content">
+            <div class="settings-header">
+                <h3>⚙️ Settings</h3>
+                <button class="close-btn" onclick="closeSettings()">✕</button>
+            </div>
+            
+            <div class="setting-item">
+                <label>Default Scan Type:</label>
+                <select id="defaultScanType">
+                    <option value="quick">⚡ Quick Scan</option>
+                    <option value="deep">🔬 Deep Scan</option>
+                </select>
+            </div>
+            
+            <div class="setting-item">
+                <label>Auto-clear results:</label>
+                <input type="checkbox" id="autoClearResults">
+            </div>
+            
+            <div class="setting-item">
+                <label>Show progress for files ></label>
+                <input type="number" id="progressThreshold" min="10" max="1000" value="50" style="width: 80px;"> lines
+            </div>
+            
+            <div class="setting-item">
+                <label>Include low severity findings:</label>
+                <input type="checkbox" id="includeLowSeverity" checked>
+            </div>
+            
+            <div style="margin-top: 20px; text-align: center;">
+                <button class="upload-btn" onclick="saveSettings()" style="background: #48bb78;">💾 Save Settings</button>
+                <button class="upload-btn" onclick="resetSettings()" style="background: #f56565; margin-left: 10px;">🔄 Reset</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let scanResults = {};
+        let chart = null;
+        let pyodide = null;
+        
+        // Initialize Pyodide
+        async function initPyodide() {
+            if (!pyodide) {
+                pyodide = await loadPyodide();
+                await pyodide.runPython(`
+import ast
+import re
+from typing import List, Dict, Any
+
+class SecurityScanner:
+    def __init__(self):
+        self.findings = []
+    
+    def scan_code(self, code: str) -> Dict[str, Any]:
+        self.findings = []
+        
+        try:
+            tree = ast.parse(code)
+            self.visit_node(tree)
+        except SyntaxError as e:
+            self.findings.append({
+                'category': 'syntax',
+                'name': 'Syntax Error',
+                'severity': 'high',
+                'line': e.lineno or 1,
+                'code': str(e),
+                'description': 'Fix syntax errors before security analysis'
+            })
+        
+        return {
+            'findings': self.findings,
+            'total_lines': len(code.split('\\n'))
+        }
+    
+    def visit_node(self, node, line_offset=0):
+        for child in ast.walk(node):
+            self.check_hardcoded_secrets(child)
+            self.check_dangerous_functions(child)
+            self.check_weak_crypto(child)
+            self.check_sql_patterns(child)
+            self.check_subprocess_usage(child)
+            self.check_imports(child)
+            self.check_file_operations(child)
+            self.check_vulnerable_dependencies(child)
+    
+    def check_hardcoded_secrets(self, node):
+        if isinstance(node, ast.Assign):
+            for target in node.targets:
+                if isinstance(target, ast.Name):
+                    var_name = target.id.lower()
+                    if isinstance(node.value, ast.Constant) and isinstance(node.value.value, str):
+                        value = node.value.value
+                        
+                        if any(secret in var_name for secret in ['password', 'pass', 'pwd']):
+                            self.add_finding('secrets', 'Hardcoded Password', 'high', node, f"{target.id} = '{value}'")
+                        elif any(key in var_name for key in ['api_key', 'apikey', 'secret']):
+                            self.add_finding('secrets', 'Secret/API Key', 'high', node, f"{target.id} = '{value}'")
+    
+    def check_dangerous_functions(self, node):
+        if isinstance(node, ast.Call):
+            if isinstance(node.func, ast.Name):
+                func_name = node.func.id
+                if func_name == 'eval':
+                    self.add_finding('injection', 'Code Injection (eval)', 'high', node, 'eval() call detected')
+                elif func_name == 'exec':
+                    self.add_finding('injection', 'Code Execution (exec)', 'high', node, 'exec() call detected')
+            elif isinstance(node.func, ast.Attribute):
+                if node.func.attr == 'execute' and len(node.args) > 0:
+                    self.add_finding('injection', 'SQL Execution Risk', 'medium', node, 'Database execute() call')
+    
+    def check_weak_crypto(self, node):
+        if isinstance(node, ast.Call):
+            if isinstance(node.func, ast.Attribute):
+                if hasattr(node.func.value, 'id') and node.func.value.id == 'hashlib':
+                    if node.func.attr in ['md5', 'sha1']:
+                        self.add_finding('crypto', 'Weak Hash Algorithm', 'medium', node, f'hashlib.{node.func.attr}() usage')
+    
+    def check_sql_patterns(self, node):
+        if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add):
+            if self.is_string_concat_with_var(node):
+                self.add_finding('injection', 'String Concatenation Risk', 'medium', node, 'Potential SQL injection via string concatenation')
+    
+    def is_string_concat_with_var(self, node):
+        def has_string_and_var(n):
+            if isinstance(n, ast.Constant) and isinstance(n.value, str):
+                return True, False
+            elif isinstance(n, ast.Name):
+                return False, True
+            elif isinstance(n, ast.BinOp) and isinstance(n.op, ast.Add):
+                left_str, left_var = has_string_and_var(n.left)
+                right_str, right_var = has_string_and_var(n.right)
+                return left_str or right_str, left_var or right_var
+            return False, False
+        
+        has_str, has_var = has_string_and_var(node)
+        return has_str and has_var
+    
+    def add_finding(self, category, name, severity, node, code_snippet):
+        self.findings.append({
+            'category': category,
+            'name': name,
+            'severity': severity,
+            'line': getattr(node, 'lineno', 1),
+            'code': code_snippet,
+            'description': self.get_description(name)
+        })
+    
+    def check_subprocess_usage(self, node):
+        if isinstance(node, ast.Call):
+            if isinstance(node.func, ast.Attribute):
+                if (hasattr(node.func.value, 'id') and 
+                    node.func.value.id == 'subprocess' and 
+                    node.func.attr in ['call', 'run', 'Popen']):
+                    # Check for shell=True
+                    for keyword in node.keywords:
+                        if keyword.arg == 'shell' and isinstance(keyword.value, ast.Constant) and keyword.value.value:
+                            self.add_finding('injection', 'Command Injection Risk', 'high', node, f'subprocess.{node.func.attr}() with shell=True')
+    
+    def check_imports(self, node):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.name in ['pickle', 'cPickle']:
+                    self.add_finding('deserialization', 'Unsafe Deserialization', 'medium', node, f'import {alias.name}')
+        elif isinstance(node, ast.ImportFrom):
+            if node.module in ['pickle', 'cPickle']:
+                self.add_finding('deserialization', 'Unsafe Deserialization', 'medium', node, f'from {node.module} import ...')
+    
+    def check_file_operations(self, node):
+        if isinstance(node, ast.Call):
+            if isinstance(node.func, ast.Name) and node.func.id == 'open':
+                if len(node.args) > 1:
+                    # Check for write modes
+                    if isinstance(node.args[1], ast.Constant):
+                        mode = node.args[1].value
+                        if 'w' in mode or 'a' in mode:
+                            self.add_finding('file_access', 'File Write Operation', 'low', node, f'open() with write mode: {mode}')
+            elif isinstance(node.func, ast.Attribute):
+                if (hasattr(node.func.value, 'id') and 
+                    node.func.value.id == 'os' and 
+                    node.func.attr in ['system', 'popen']):
+                    self.add_finding('injection', 'OS Command Execution', 'high', node, f'os.{node.func.attr}() call')
+    
+    def check_vulnerable_dependencies(self, node):
+        # Known vulnerable or risky packages
+        vulnerable_packages = {
+            'requests': ('Potential for SSRF vulnerabilities', 'low'),
+            'urllib': ('Manual URL handling can lead to vulnerabilities', 'low'),
+            'xml.etree': ('XML parsing without security configurations', 'medium'),
+            'yaml': ('YAML loading can execute arbitrary code', 'high'),
+            'pickle': ('Arbitrary code execution during deserialization', 'high'),
+            'shelve': ('Uses pickle internally - deserialization risk', 'medium'),
+            'jsonpickle': ('JSON + pickle combination risks', 'medium'),
+            'flask': ('Debug mode and security configurations needed', 'low'),
+            'django': ('Security middleware and settings critical', 'low')
+        }
+        
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                package_name = alias.name.split('.')[0]  # Get root package
+                if package_name in vulnerable_packages:
+                    desc, severity = vulnerable_packages[package_name]
+                    self.add_finding('dependencies', f'Risky Package: {package_name}', severity, node, f'import {alias.name}')
+        elif isinstance(node, ast.ImportFrom):
+            if node.module:
+                package_name = node.module.split('.')[0]
+                if package_name in vulnerable_packages:
+                    desc, severity = vulnerable_packages[package_name]
+                    self.add_finding('dependencies', f'Risky Package: {package_name}', severity, node, f'from {node.module} import ...')
+    
+    def get_description(self, name):
+        descriptions = {
+            'Hardcoded Password': 'Store passwords in environment variables or secure vaults',
+            'Secret/API Key': 'Externalize secrets using environment variables or key management',
+            'Code Injection (eval)': 'Never use eval() with user input - use safer alternatives',
+            'Code Execution (exec)': 'Avoid exec() with untrusted input - use safer alternatives',
+            'SQL Execution Risk': 'Use parameterized queries to prevent SQL injection',
+            'Weak Hash Algorithm': 'Use SHA-256 or stronger hashing algorithms',
+            'String Concatenation Risk': 'Use parameterized queries instead of string concatenation',
+            'Command Injection Risk': 'Avoid shell=True in subprocess calls - use array arguments',
+            'OS Command Execution': 'Use subprocess module instead of os.system/popen',
+            'Unsafe Deserialization': 'Avoid pickle with untrusted data - use safer serialization',
+            'File Write Operation': 'Ensure file paths are validated and sanitized',
+            'Risky Package: requests': 'Configure timeouts and validate URLs to prevent SSRF',
+            'Risky Package: urllib': 'Validate and sanitize URLs before making requests',
+            'Risky Package: xml.etree': 'Disable external entity processing to prevent XXE attacks',
+            'Risky Package: yaml': 'Use yaml.safe_load() instead of yaml.load()',
+            'Risky Package: pickle': 'Never unpickle untrusted data - use JSON instead',
+            'Risky Package: shelve': 'Be aware of pickle-based security risks',
+            'Risky Package: jsonpickle': 'Avoid with untrusted data - use pure JSON',
+            'Risky Package: flask': 'Ensure debug=False in production and configure security headers',
+            'Risky Package: django': 'Review security settings and enable security middleware'
+        }
+        return descriptions.get(name, 'Security issue detected')
+
+scanner = SecurityScanner()
+                `);
+            }
+            return pyodide;
+        }
+        
+        // Security patterns
+        const securityRules = {
+            secrets: [
+                { pattern: /(?:password|pwd|pass)\s*[=:]\s*["']([^"']+)["']/gi, name: "Hardcoded Password", severity: "high" },
+                { pattern: /(?:api[_-]?key|apikey)\s*[=:]\s*["']([^"']+)["']/gi, name: "API Key Exposure", severity: "high" },
+                { pattern: /(?:secret[_-]?key|secretkey)\s*[=:]\s*["']([^"']+)["']/gi, name: "Secret Key", severity: "high" },
+                { pattern: /(?:token)\s*[=:]\s*["']([^"']+)["']/gi, name: "Token Exposure", severity: "medium" },
+                { pattern: /(?:private[_-]?key|privatekey)\s*[=:]\s*["']([^"']+)["']/gi, name: "Private Key", severity: "high" }
+            ],
+            injection: [
+                { pattern: /["']\s*\+\s*.*\s*\+\s*["']/g, name: "SQL Injection Risk", severity: "high" },
+                { pattern: /execute\s*\(\s*["'].*["']\s*\+/gi, name: "Dynamic SQL Execution", severity: "high" },
+                { pattern: /innerHTML\s*[=+]\s*.*[+]/g, name: "XSS Risk (innerHTML)", severity: "medium" },
+                { pattern: /document\.write\s*\(/g, name: "XSS Risk (document.write)", severity: "medium" },
+                { pattern: /eval\s*\(/g, name: "Code Injection (eval)", severity: "high" }
+            ],
+            crypto: [
+                { pattern: /md5|sha1(?![0-9])/gi, name: "Weak Hash Algorithm", severity: "medium" },
+                { pattern: /des|rc4/gi, name: "Weak Encryption", severity: "high" },
+                { pattern: /Math\.random\(\)/g, name: "Weak Random Generator", severity: "low" }
+            ],
+            paths: [
+                { pattern: /\.\.[\/\\]/g, name: "Path Traversal Risk", severity: "medium" },
+                { pattern: /\/tmp\/|\\temp\\/g, name: "Temp Directory Usage", severity: "low" }
+            ]
+        };
+        
+        // File upload handler
+        document.getElementById('fileInput').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    document.getElementById('codeInput').value = e.target.result;
+                };
+                reader.readAsText(file);
+            }
+        });
+        
+        async function scanCode() {
+            const code = document.getElementById('codeInput').value.trim();
+            if (!code) {
+                alert('Please upload a file or paste some code first!');
+                return;
+            }
+            
+            const settings = getSettings();
+            const scanType = document.querySelector('input[name="scanType"]:checked').value;
+            
+            // Auto-clear previous results if enabled
+            if (settings.autoClearResults) {
+                document.getElementById('results').style.display = 'none';
+            }
+            
+            // Show loading
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('results').style.display = 'none';
+            document.getElementById('scanBtn').disabled = true;
+            document.getElementById('scanBtn').textContent = scanType === 'deep' ? '🔬 Deep Scanning...' : '⚡ Quick Scanning...';
+            
+            try {
+                if (scanType === 'deep') {
+                    await performDeepScan(code);
+                } else {
+                    // Simulate scanning delay for better UX
+                    setTimeout(() => {
+                        performQuickScan(code);
+                        displayResults();
+                        document.getElementById('loading').style.display = 'none';
+                        document.getElementById('results').style.display = 'block';
+                        resetScanButton();
+                    }, 800);
+                    return;
+                }
+                
+                displayResults();
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('results').style.display = 'block';
+            } catch (error) {
+                console.error('Scan error:', error);
+                alert('Scanning failed: ' + error.message);
+            } finally {
+                resetScanButton();
+            }
+        }
+        
+        function resetScanButton() {
+            document.getElementById('scanBtn').disabled = false;
+            document.getElementById('scanBtn').textContent = '🔍 Scan for Vulnerabilities';
+        }
+        
+        async function performDeepScan(code) {
+            const settings = getSettings();
+            const totalLines = code.split('\n').length;
+            const showProgress = totalLines > settings.progressThreshold;
+            
+            if (showProgress) {
+                document.getElementById('progressContainer').style.display = 'block';
+                updateProgress(10, 'Initializing Python environment...');
+            }
+            
+            // Initialize Pyodide if not already done
+            await initPyodide();
+            
+            if (showProgress) {
+                updateProgress(30, 'Parsing code structure...');
+            }
+            
+            // Pass code to Python scanner
+            pyodide.globals.set("code_to_scan", code);
+            
+            if (showProgress) {
+                updateProgress(50, 'Running AST security analysis...');
+            }
+            
+            await pyodide.runPython(`
+result = scanner.scan_code(code_to_scan)
+            `);
+            
+            if (showProgress) {
+                updateProgress(70, 'Running regex pattern matching...');
+            }
+            
+            // Get results from Python
+            const pythonResults = pyodide.globals.get('result').toJs({dict_converter: Object.fromEntries});
+            
+            // Convert Python findings to our format and merge with regex findings
+            const astFindings = pythonResults.findings.map(finding => ({
+                category: finding.category,
+                name: finding.name,
+                severity: finding.severity,
+                line: finding.line,
+                code: finding.code,
+                description: finding.description,
+                source: 'AST'
+            }));
+            
+            // Also run quick scan for broader coverage
+            const regexFindings = performQuickScanInternal(code).map(finding => ({
+                ...finding,
+                source: 'Regex'
+            }));
+            
+            // Combine and deduplicate findings
+            const allFindings = [...astFindings, ...regexFindings];
+            const uniqueFindings = deduplicateFindings(allFindings);
+            
+            if (showProgress) {
+                updateProgress(90, 'Calculating security score...');
+            }
+            
+            // Calculate enhanced security score
+            const highCount = uniqueFindings.filter(f => f.severity === 'high').length;
+            const mediumCount = uniqueFindings.filter(f => f.severity === 'medium').length;
+            const lowCount = uniqueFindings.filter(f => f.severity === 'low').length;
+            
+            const weightedIssues = (highCount * 3) + (mediumCount * 2) + (lowCount * 1);
+            const score = Math.max(0, Math.min(100, 100 - (weightedIssues * 8))); // Slightly stricter scoring for deep scan
+            
+            if (showProgress) {
+                updateProgress(100, 'Analysis complete!');
+                // Hide progress after a brief delay
+                setTimeout(() => {
+                    document.getElementById('progressContainer').style.display = 'none';
+                }, 500);
+            }
+            
+            scanResults = {
+                findings: uniqueFindings,
+                score: Math.round(score),
+                counts: { high: highCount, medium: mediumCount, low: lowCount },
+                totalLines: pythonResults.total_lines,
+                scanType: 'deep'
+            };
+        }
+        
+        function updateProgress(percentage, message) {
+            document.getElementById('progressFill').style.width = percentage + '%';
+            document.getElementById('progressText').textContent = percentage + '%';
+            document.getElementById('loadingText').textContent = message;
+        }
+        
+        function deduplicateFindings(findings) {
+            const seen = new Set();
+            return findings.filter(finding => {
+                const key = `${finding.line}-${finding.name}-${finding.severity}`;
+                if (seen.has(key)) return false;
+                seen.add(key);
+                return true;
+            });
+        }
+        
+        function performQuickScan(code) {
+            const findings = performQuickScanInternal(code);
+            
+            // Calculate security score
+            const highCount = findings.filter(f => f.severity === 'high').length;
+            const mediumCount = findings.filter(f => f.severity === 'medium').length;
+            const lowCount = findings.filter(f => f.severity === 'low').length;
+            
+            const totalLines = code.split('\n').length;
+            const weightedIssues = (highCount * 3) + (mediumCount * 2) + (lowCount * 1);
+            const score = Math.max(0, Math.min(100, 100 - (weightedIssues * 10)));
+            
+            scanResults = {
+                findings: findings,
+                score: Math.round(score),
+                counts: { high: highCount, medium: mediumCount, low: lowCount },
+                totalLines: totalLines,
+                scanType: 'quick'
+            };
+        }
+        
+        function performQuickScanInternal(code) {
+            const findings = [];
+            
+            // Scan each category
+            Object.entries(securityRules).forEach(([category, rules]) => {
+                rules.forEach(rule => {
+                    const lines = code.split('\n');
+                    
+                    lines.forEach((line, index) => {
+                        const matches = line.match(rule.pattern);
+                        if (matches) {
+                            findings.push({
+                                category: category,
+                                name: rule.name,
+                                severity: rule.severity,
+                                line: index + 1,
+                                code: line.trim(),
+                                description: getDescription(rule.name)
+                            });
+                        }
+                    });
+                });
+            });
+            
+            return findings;
+        }
+        
+        function getDescription(name) {
+            const descriptions = {
+                "Hardcoded Password": "Passwords should be stored in environment variables or secure vaults",
+                "API Key Exposure": "API keys should be stored securely and never committed to code",
+                "Secret Key": "Secret keys should be externalized and encrypted at rest",
+                "Token Exposure": "Tokens should be stored securely and have proper expiration",
+                "Private Key": "Private keys should never be hardcoded in source code",
+                "SQL Injection Risk": "Use parameterized queries to prevent SQL injection",
+                "Dynamic SQL Execution": "Avoid dynamic SQL construction with user input",
+                "XSS Risk (innerHTML)": "Sanitize input before inserting into DOM",
+                "XSS Risk (document.write)": "Avoid document.write with dynamic content",
+                "Code Injection (eval)": "Never use eval() with user-controlled input",
+                "Weak Hash Algorithm": "Use SHA-256 or stronger hashing algorithms",
+                "Weak Encryption": "Use AES-256 or other strong encryption standards",
+                "Weak Random Generator": "Use cryptographically secure random generators",
+                "Path Traversal Risk": "Validate and sanitize file paths to prevent directory traversal",
+                "Temp Directory Usage": "Be cautious with temporary file operations"
+            };
+            return descriptions[name] || "Security issue detected";
+        }
+        
+        function displayResults() {
+            const settings = getSettings();
+            
+            // Filter findings based on settings
+            let displayFindings = scanResults.findings;
+            if (!settings.includeLowSeverity) {
+                displayFindings = scanResults.findings.filter(f => f.severity !== 'low');
+            }
+            
+            // Update metrics
+            document.getElementById('securityScore').textContent = scanResults.score;
+            document.getElementById('issueCount').textContent = displayFindings.length;
+            
+            // Update scan type badge
+            const scanTypeBadge = document.getElementById('scanTypeBadge');
+            scanTypeBadge.textContent = scanResults.scanType === 'deep' ? '🔬 Deep Scan' : '⚡ Quick Scan';
+            
+            // Color code security score
+            const scoreElement = document.getElementById('securityScore');
+            scoreElement.className = 'metric-value ' + 
+                (scanResults.score >= 80 ? 'score-high' : 
+                 scanResults.score >= 60 ? 'score-medium' : 'score-low');
+            
+            // Create vulnerability chart
+            createChart(displayFindings);
+            
+            // Display findings
+            const findingsList = document.getElementById('findingsList');
+            findingsList.innerHTML = '';
+            
+            if (displayFindings.length === 0) {
+                const message = settings.includeLowSeverity ? 
+                    '🎉 No security issues found!' : 
+                    '🎉 No high/medium severity issues found!';
+                findingsList.innerHTML = `<p style="text-align: center; color: #48bb78; font-size: 1.2rem;">${message}</p>`;
+            } else {
+                displayFindings.forEach(finding => {
+                    const div = document.createElement('div');
+                    div.className = `finding ${finding.severity}`;
+                    const sourceTag = finding.source ? `<span class="finding-source">${finding.source}</span>` : '';
+                    div.innerHTML = `
+                        <div class="finding-title">${finding.name}${sourceTag}</div>
+                        <div style="margin: 8px 0; color: #4a5568;">${finding.description}</div>
+                        <div class="finding-line">Line ${finding.line}: ${finding.code}</div>
+                    `;
+                    findingsList.appendChild(div);
+                });
+            }
+        }
+        
+        function createChart(displayFindings = null) {
+            const ctx = document.getElementById('vulnerabilityChart').getContext('2d');
+            
+            if (chart) {
+                chart.destroy();
+            }
+            
+            // Use filtered findings if provided, otherwise use all findings
+            const findings = displayFindings || scanResults.findings;
+            const highCount = findings.filter(f => f.severity === 'high').length;
+            const mediumCount = findings.filter(f => f.severity === 'medium').length;
+            const lowCount = findings.filter(f => f.severity === 'low').length;
+            
+            const data = {
+                labels: ['High', 'Medium', 'Low'],
+                datasets: [{
+                    label: 'Vulnerabilities by Severity',
+                    data: [highCount, mediumCount, lowCount],
+                    backgroundColor: ['#f56565', '#ed8936', '#48bb78'],
+                    borderWidth: 0
+                }]
+            };
+            
+            chart = new Chart(ctx, {
+                type: 'doughnut',
+                data: data,
+                options: {
+                    responsive: true,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: 'Vulnerability Distribution',
+                            font: { size: 16, weight: 'bold' }
+                        },
+                        legend: {
+                            position: 'bottom'
+                        }
+                    }
+                }
+            });
+        }
+        
+        function exportReport(format) {
+            const timestamp = new Date().toISOString().split('T')[0];
+            
+            if (format === 'json') {
+                const report = {
+                    timestamp: new Date().toISOString(),
+                    scanType: scanResults.scanType || 'quick',
+                    score: scanResults.score,
+                    summary: scanResults.counts,
+                    totalLines: scanResults.totalLines,
+                    findings: scanResults.findings,
+                    metadata: {
+                        tool: 'DevSec Dash',
+                        version: '2.0'
+                    }
+                };
+                
+                const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' });
+                downloadFile(blob, `security-report-${timestamp}.json`);
+            } else if (format === 'markdown') {
+                let markdown = `# Security Scan Report\n\n`;
+                markdown += `**Date:** ${new Date().toLocaleDateString()}\n`;
+                markdown += `**Scan Type:** ${scanResults.scanType === 'deep' ? '🔬 Deep Scan (AST Analysis)' : '⚡ Quick Scan (Regex)'}\n`;
+                markdown += `**Security Score:** ${scanResults.score}/100\n`;
+                markdown += `**Total Issues:** ${scanResults.findings.length}\n`;
+                markdown += `**Lines Analyzed:** ${scanResults.totalLines}\n\n`;
+                
+                markdown += `## Summary\n\n`;
+                markdown += `- High Severity: ${scanResults.counts.high}\n`;
+                markdown += `- Medium Severity: ${scanResults.counts.medium}\n`;
+                markdown += `- Low Severity: ${scanResults.counts.low}\n\n`;
+                
+                if (scanResults.findings.length > 0) {
+                    markdown += `## Findings\n\n`;
+                    scanResults.findings.forEach((finding, index) => {
+                        const sourceInfo = finding.source ? ` (${finding.source})` : '';
+                        markdown += `### ${index + 1}. ${finding.name}${sourceInfo} (${finding.severity.toUpperCase()})\n\n`;
+                        markdown += `**Line ${finding.line}:** \`${finding.code}\`\n\n`;
+                        markdown += `${finding.description}\n\n`;
+                    });
+                }
+                
+                markdown += `---\n*Generated by DevSec Dash v2.0 - Local Security Scanner*\n`;
+                
+                const blob = new Blob([markdown], { type: 'text/markdown' });
+                downloadFile(blob, `security-report-${timestamp}.md`);
+            } else if (format === 'pdf') {
+                const { jsPDF } = window.jspdf;
+                const doc = new jsPDF();
+                
+                // Title and header
+                doc.setFontSize(20);
+                doc.setFont('helvetica', 'bold');
+                doc.text('DevSec Dash - Security Report', 20, 25);
+                
+                doc.setFontSize(12);
+                doc.setFont('helvetica', 'normal');
+                doc.text(`Date: ${new Date().toLocaleDateString()}`, 20, 35);
+                doc.text(`Scan Type: ${scanResults.scanType === 'deep' ? 'Deep Scan (AST Analysis)' : 'Quick Scan (Regex)'}`, 20, 42);
+                doc.text(`Security Score: ${scanResults.score}/100`, 20, 49);
+                doc.text(`Total Issues: ${scanResults.findings.length}`, 20, 56);
+                doc.text(`Lines Analyzed: ${scanResults.totalLines}`, 20, 63);
+                
+                // Summary section
+                doc.setFont('helvetica', 'bold');
+                doc.text('Summary', 20, 78);
+                doc.setFont('helvetica', 'normal');
+                doc.text(`High Severity: ${scanResults.counts.high}`, 30, 88);
+                doc.text(`Medium Severity: ${scanResults.counts.medium}`, 30, 95);
+                doc.text(`Low Severity: ${scanResults.counts.low}`, 30, 102);
+                
+                let yPos = 120;
+                
+                if (scanResults.findings.length > 0) {
+                    doc.setFont('helvetica', 'bold');
+                    doc.text('Findings', 20, yPos);
+                    yPos += 15;
+                    
+                    scanResults.findings.forEach((finding, index) => {
+                        if (yPos > 270) { // Start new page if needed
+                            doc.addPage();
+                            yPos = 20;
+                        }
+                        
+                        doc.setFont('helvetica', 'bold');
+                        doc.text(`${index + 1}. ${finding.name} (${finding.severity.toUpperCase()})`, 20, yPos);
+                        yPos += 7;
+                        
+                        doc.setFont('helvetica', 'normal');
+                        doc.text(`Line ${finding.line}: ${finding.code.substring(0, 60)}${finding.code.length > 60 ? '...' : ''}`, 30, yPos);
+                        yPos += 7;
+                        
+                        // Wrap description text
+                        const description = finding.description;
+                        const lines = doc.splitTextToSize(description, 160);
+                        doc.text(lines, 30, yPos);
+                        yPos += lines.length * 7 + 5;
+                    });
+                }
+                
+                // Footer
+                const pageCount = doc.internal.getNumberOfPages();
+                for (let i = 1; i <= pageCount; i++) {
+                    doc.setPage(i);
+                    doc.setFontSize(10);
+                    doc.setFont('helvetica', 'italic');
+                    doc.text('Generated by DevSec Dash v2.0 - Local Security Scanner', 20, 285);
+                }
+                
+                doc.save(`security-report-${timestamp}.pdf`);
+            }
+        }
+        
+        function downloadFile(blob, filename) {
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+        
+        // Settings management
+        function openSettings() {
+            loadSettings();
+            document.getElementById('settingsModal').style.display = 'block';
+        }
+        
+        function closeSettings() {
+            document.getElementById('settingsModal').style.display = 'none';
+        }
+        
+        function loadSettings() {
+            const settings = getSettings();
+            document.getElementById('defaultScanType').value = settings.defaultScanType;
+            document.getElementById('autoClearResults').checked = settings.autoClearResults;
+            document.getElementById('progressThreshold').value = settings.progressThreshold;
+            document.getElementById('includeLowSeverity').checked = settings.includeLowSeverity;
+        }
+        
+        function saveSettings() {
+            const settings = {
+                defaultScanType: document.getElementById('defaultScanType').value,
+                autoClearResults: document.getElementById('autoClearResults').checked,
+                progressThreshold: parseInt(document.getElementById('progressThreshold').value),
+                includeLowSeverity: document.getElementById('includeLowSeverity').checked
+            };
+            
+            localStorage.setItem('devSecDashSettings', JSON.stringify(settings));
+            applySettings(settings);
+            closeSettings();
+            
+            // Show confirmation
+            const originalText = document.querySelector('.settings-btn').textContent;
+            document.querySelector('.settings-btn').textContent = '✅';
+            setTimeout(() => {
+                document.querySelector('.settings-btn').textContent = originalText;
+            }, 1000);
+        }
+        
+        function resetSettings() {
+            localStorage.removeItem('devSecDashSettings');
+            loadSettings();
+        }
+        
+        function getSettings() {
+            const defaultSettings = {
+                defaultScanType: 'quick',
+                autoClearResults: false,
+                progressThreshold: 50,
+                includeLowSeverity: true
+            };
+            
+            const saved = localStorage.getItem('devSecDashSettings');
+            return saved ? { ...defaultSettings, ...JSON.parse(saved) } : defaultSettings;
+        }
+        
+        function applySettings(settings) {
+            // Apply default scan type
+            document.querySelector(`input[name="scanType"][value="${settings.defaultScanType}"]`).checked = true;
+        }
+        
+        // Demo code loader
+        function loadDemo() {
+            const demoCode = `import os
+import hashlib
+import subprocess
+
+# Security issues for demo - DevSec Dash Test
+password = "admin123"  # Hardcoded password
+api_key = "sk-abc123xyz"  # API key exposure  
+secret_key = "my-secret-key-123"  # Secret key
+
+def login(user_input):
+    # SQL injection vulnerability
+    query = "SELECT * FROM users WHERE name='" + user_input + "'"
+    
+    # Dangerous eval usage
+    eval("print('hello')")
+    
+    # Dangerous exec usage
+    exec(user_input)
+    
+    # Weak hashing
+    hash = hashlib.md5(password.encode()).hexdigest()
+    weak_hash = hashlib.sha1(password.encode()).hexdigest()
+    
+    # Path traversal risk
+    file_path = "../../../etc/passwd"
+    
+    return execute_query(query)
+
+def process_data(user_command):
+    # Command injection risk
+    subprocess.call(user_command, shell=True)
+    
+    # More string concatenation risks
+    sql = "INSERT INTO logs VALUES ('" + user_command + "')"
+    
+def render_page(content):
+    # XSS vulnerability
+    return "<div>" + content + "</div>"
+
+# Test both scanners with this rich example
+`;
+            document.getElementById('codeInput').value = demoCode;
+        }
+        
+        // Initialize app
+        document.addEventListener('DOMContentLoaded', function() {
+            // Load and apply saved settings
+            const settings = getSettings();
+            applySettings(settings);
+            
+            // Add demo button
+            const demoBtn = document.createElement('button');
+            demoBtn.textContent = '🎯 Try Demo Code';
+            demoBtn.className = 'upload-btn';
+            demoBtn.style.background = '#6c5ce7';
+            demoBtn.onclick = loadDemo;
+            document.querySelector('.file-upload').insertBefore(demoBtn, document.querySelector('textarea'));
+            
+            // Close settings modal when clicking outside
+            document.getElementById('settingsModal').addEventListener('click', function(e) {
+                if (e.target === this) {
+                    closeSettings();
+                }
+            });
+        });
+    </script>
+</body>
+</html>
