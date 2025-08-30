@@ -1,0 +1,6 @@
+flask==3.0.3
+flask-cors==5.0.0
+bandit==1.7.9
+semgrep==1.134.0
+safety==3.2.10
+requests==2.32.3
