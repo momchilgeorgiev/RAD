@@ -1,4 +1,4 @@
-# 🛡️ DevSec Dash v3.0
+# 🛡️ Risk Analysis Dashboard v3.0
 
 RAD (Risk Analysis Dashboard) is a **Local Security Scanner** for your project.
 
