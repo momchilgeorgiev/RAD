@@ -1,6 +1,6 @@
 # 🛡️ DevSec Dash v3.0
 
-**Local Security Scanner** - Professional Python backend + Beautiful JavaScript frontend
+RAD (Risk Analysis Dashboard) is a **Local Security Scanner** for your project.
 
 ## Features
 
